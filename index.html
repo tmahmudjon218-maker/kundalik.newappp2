@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Maktab Dashboard - Netlify</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#89b4fa',
+                        secondary: '#94e2d5',
+                        success: '#a6e3a1',
+                        danger: '#f38ba8',
+                        warning: '#f9e2af',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300" 
+      x-data="dashboard()" 
+      x-init="init()">
+    
+    <!-- Notification -->
+    <div x-show="notification.show" 
+         x-cloak
+         class="notification"
+         :class="{
+             'bg-success text-gray-900': notification.type === 'success',
+             'bg-danger text-white': notification.type === 'error',
+             'bg-primary text-white': notification.type === 'info',
+             'bg-warning text-gray-900': notification.type === 'warning'
+         }">
+        <div class="flex items-center">
+            <span x-text="notification.message" class="font-medium"></span>
+            <button @click="notification.show = false" class="ml-4 text-2xl leading-none">&times;</button>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="bg-white dark:bg-gray-800 shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-2xl">🎓</span>
+                    <span class="ml-2 text-xl font-bold text-gray-800 dark:text-white">
+                        E-Maktab created by t101
+                    </span>
+                    <span class="ml-3 text-xs px-2 py-1 bg-primary text-white rounded-full">
+                        Netlify Static
+                    </span>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <!-- Stats -->
+                    <div class="hidden md:flex items-center space-x-4 text-sm">
+                        <div class="flex items-center">
+                            <span class="text-gray-600 dark:text-gray-300">Jami:</span>
+                            <span class="ml-1 font-bold text-primary" x-text="students.length">0</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="text-success">✅</span>
+                            <span class="ml-1 font-bold" x-text="stats.success">0</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="text-danger">❌</span>
+                            <span class="ml-1 font-bold" x-text="stats.failed">0</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Dark Mode Toggle -->
+                    <button @click="darkMode = !darkMode; saveDarkMode()" 
+                            class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                        <span x-show="!darkMode">🌙</span>
+                        <span x-show="darkMode">☀️</span>
+                    </button>
+                    
+                    <!-- Add Student Button -->
+                    <button @click="showAddModal = true"
+                            class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 font-medium">
+                        ➕ Qo'shish
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Quick Actions -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <!-- Stat Card 1 -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">Jami</p>
+                        <p class="text-3xl font-bold text-gray-800 dark:text-white" x-text="students.length">0</p>
+                    </div>
+                    <div class="text-4xl">👥</div>
+                </div>
+            </div>
+            
+            <!-- Stat Card 2 -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">Kirgan</p>
+                        <p class="text-3xl font-bold text-success" x-text="stats.success">0</p>
+                    </div>
+                    <div class="text-4xl">✅</div>
+                </div>
+            </div>
+            
+            <!-- Stat Card 3 -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">Kirmagan</p>
+                        <p class="text-3xl font-bold text-danger" x-text="stats.failed">0</p>
+                    </div>
+                    <div class="text-4xl">❌</div>
+                </div>
+            </div>
+            
+            <!-- Stat Card 4 -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">Kutilmoqda</p>
+                        <p class="text-3xl font-bold text-warning" x-text="stats.pending">0</p>
+                    </div>
+                    <div class="text-4xl">⏳</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap gap-4 mb-6">
+            <button @click="loginAll()" 
+                    :disabled="loginInProgress"
+                    :class="loginInProgress ? 'opacity-50 cursor-not-allowed' : ''"
+                    class="px-6 py-3 bg-success text-gray-900 rounded-lg hover:bg-green-500 font-medium shadow-lg flex items-center">
+                <span x-show="loginInProgress" class="animate-spin mr-2">🔄</span>
+                🚀 Hammasiga kirish
+            </button>
+            <button @click="showBulkModal = true"
+                    class="px-6 py-3 bg-secondary text-gray-900 rounded-lg hover:bg-teal-400 font-medium shadow-lg">
+                📥 Bulk import
+            </button>
+            <label class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium shadow-lg cursor-pointer">
+                📊 Excel yuklash
+                <input type="file" accept=".xlsx,.xls" class="hidden" @change="excelYuklash($event)">
+            </label>
+            <button @click="exportData()"
+                    class="px-6 py-3 bg-primary text-white rounded-lg hover:bg-blue-600 font-medium shadow-lg">
+                💾 Export JSON
+            </button>
+            <button @click="deleteAll()"
+                    class="px-6 py-3 bg-danger text-white rounded-lg hover:bg-red-600 font-medium shadow-lg">
+                🗑️ Hammasini o'chirish
+            </button>
+        </div>
+
+        <!-- Students Table -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-xl font-bold text-gray-800 dark:text-white">O'quvchilar ro'yxati</h2>
+            </div>
+            
+            <!-- Search -->
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <input type="text" 
+                       x-model="searchQuery"
+                       @input="filterStudents()"
+                       placeholder="🔍 Qidirish (login, ism, sinf)..."
+                       class="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">#</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Login</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Ism</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Sinf</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Oxirgi kirish</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Amallar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="(student, index) in filteredStudents" :key="student.id">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400" 
+                                    x-text="index + 1"></td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white" 
+                                         x-text="student.login"></div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900 dark:text-white" 
+                                         x-text="student.full_name || '-'"></div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900 dark:text-white" 
+                                         x-text="student.class_name || '-'"></div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span x-show="student.status === 'success'" 
+                                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                        ✅ Kirgan
+                                    </span>
+                                    <span x-show="student.status === 'failed'" 
+                                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                        ❌ Kirmadi
+                                    </span>
+                                    <span x-show="student.status === 'pending'" 
+                                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                        ⏳ Kutilmoqda
+                                    </span>
+                                    <span x-show="student.status === 'loading'" 
+                                          class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                        🔄 Yuklanmoqda
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    <span x-text="student.last_login || '-'"></span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <button @click="loginStudent(student)" 
+                                            class="text-primary hover:text-blue-600 mr-3"
+                                            :disabled="student.status === 'loading'">
+                                        🚀
+                                    </button>
+                                    <button @click="deleteStudent(student.id)" 
+                                            class="text-danger hover:text-red-600">
+                                        🗑️
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                
+                <!-- Empty State -->
+                <div x-show="filteredStudents.length === 0" 
+                     class="text-center py-12">
+                    <p class="text-gray-500 dark:text-gray-400 text-lg">
+                        O'quvchilar topilmadi
+                    </p>
+                    <button @click="showAddModal = true"
+                            class="mt-4 px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600">
+                        ➕ Birinchi o'quvchini qo'shing
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Student Modal -->
+    <div x-show="showAddModal" 
+         x-cloak
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+         @click.self="showAddModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md" @click.stop>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">O'quvchi qo'shish</h3>
+            <form @submit.prevent="addStudent()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Login *
+                        </label>
+                        <input type="text" x-model="newStudent.login" required
+                               class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Parol 1 *
+                        </label>
+                        <input type="text" x-model="newStudent.password1" required
+                               class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Parol 2
+                        </label>
+                        <input type="text" x-model="newStudent.password2"
+                               class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Sinf
+                        </label>
+                        <input type="text" x-model="newStudent.class_name" placeholder="9-A"
+                               class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            To'liq ismi
+                        </label>
+                        <input type="text" x-model="newStudent.full_name"
+                               class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" @click="showAddModal = false"
+                            class="px-4 py-2 border rounded-lg hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white">
+                        Bekor qilish
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600">
+                        Qo'shish
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal -->
+    <div x-show="showBulkModal" 
+         x-cloak
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+         @click.self="showBulkModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl" @click.stop>
+            <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">Bulk Import</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Format: <code class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">login | parol1 | parol2 | sinf | ism</code>
+            </p>
+            <textarea x-model="bulkData" rows="10"
+                      placeholder="azamov.abdulbosit | 12345678 | 87654321 | 9-A | Azamov Ali
+m.abdurasulova | 12345678 | 87654321 | 9-B | Madina"
+                      class="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"></textarea>
+            <div class="flex justify-end space-x-3 mt-4">
+                <button @click="showBulkModal = false"
+                        class="px-4 py-2 border rounded-lg hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white">
+                    Bekor qilish
+                </button>
+                <button @click="bulkImport()"
+                        class="px-4 py-2 bg-secondary text-gray-900 rounded-lg hover:bg-teal-400">
+                    Import
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function dashboard() {
+            return {
+                students: [],
+                filteredStudents: [],
+                searchQuery: '',
+                stats: {
+                    success: 0,
+                    failed: 0,
+                    pending: 0
+                },
+                showAddModal: false,
+                showBulkModal: false,
+                newStudent: {
+                    login: '',
+                    password1: '12345678',
+                    password2: '87654321',
+                    class_name: '',
+                    full_name: ''
+                },
+                bulkData: '',
+                darkMode: false,
+                loginInProgress: false,
+                notification: {
+                    show: false,
+                    message: '',
+                    type: 'info'
+                },
+
+                init() {
+                    this.loadStudents();
+                    this.loadDarkMode();
+                    this.calculateStats();
+                },
+
+                loadDarkMode() {
+                    const saved = localStorage.getItem('darkMode');
+                    this.darkMode = saved === 'true';
+                    if (this.darkMode) {
+                        document.documentElement.classList.add('dark');
+                    }
+                },
+
+                saveDarkMode() {
+                    localStorage.setItem('darkMode', this.darkMode);
+                    if (this.darkMode) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                },
+
+                loadStudents() {
+                    const saved = localStorage.getItem('students');
+                    if (saved) {
+                        this.students = JSON.parse(saved);
+                        this.filteredStudents = [...this.students];
+                    }
+                    this.calculateStats();
+                },
+
+                saveStudents() {
+                    localStorage.setItem('students', JSON.stringify(this.students));
+                    this.calculateStats();
+                },
+
+                calculateStats() {
+                    this.stats.success = this.students.filter(s => s.status === 'success').length;
+                    this.stats.failed = this.students.filter(s => s.status === 'failed').length;
+                    this.stats.pending = this.students.filter(s => s.status === 'pending').length;
+                },
+
+                filterStudents() {
+                    const query = this.searchQuery.toLowerCase();
+                    this.filteredStudents = this.students.filter(student => 
+                        (student.login && student.login.toLowerCase().includes(query)) ||
+                        (student.full_name && student.full_name.toLowerCase().includes(query)) ||
+                        (student.class_name && student.class_name.toLowerCase().includes(query))
+                    );
+                },
+
+                addStudent() {
+                    const exists = this.students.find(s => s.login === this.newStudent.login);
+                    if (exists) {
+                        this.showNotification('Bu login allaqachon mavjud!', 'error');
+                        return;
+                    }
+
+                    const student = {
+                        id: Date.now(),
+                        ...this.newStudent,
+                        status: 'pending',
+                        last_login: null
+                    };
+
+                    this.students.push(student);
+                    this.saveStudents();
+                    this.filterStudents();
+                    this.showAddModal = false;
+                    this.newStudent = {
+                        login: '',
+                        password1: '12345678',
+                        password2: '87654321',
+                        class_name: '',
+                        full_name: ''
+                    };
+                    this.showNotification('O\'quvchi qo\'shildi!', 'success');
+                },
+
+                bulkImport() {
+                    if (!this.bulkData.trim()) {
+                        this.showNotification('Ma\'lumot kiritilmagan!', 'error');
+                        return;
+                    }
+
+                    const lines = this.bulkData.split('\n').filter(l => l.trim());
+                    let added = 0;
+
+                    lines.forEach(line => {
+                        const parts = line.split('|').map(p => p.trim());
+                        if (parts.length < 2) return;
+
+                        const login = parts[0];
+                        const exists = this.students.find(s => s.login === login);
+                        if (exists) return;
+
+                        this.students.push({
+                            id: Date.now() + Math.random(),
+                            login: parts[0],
+                            password1: parts[1],
+                            password2: parts[2] || '',
+                            class_name: parts[3] || '',
+                            full_name: parts[4] || '',
+                            status: 'pending',
+                            last_login: null
+                        });
+                        added++;
+                    });
+
+                    this.saveStudents();
+                    this.filterStudents();
+                    this.showBulkModal = false;
+                    this.bulkData = '';
+                    this.showNotification(`${added} ta qo'shildi!`, 'success');
+                },
+
+                async loginStudent(student) {
+                    student.status = 'loading';
+                    this.calculateStats();
+
+                    // Simulate login (replace with real API call)
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // Random success for demo
+                    const success = Math.random() > 0.1;
+                    
+                    student.status = success ? 'success' : 'failed';
+                    student.last_login = success ? new Date().toLocaleString('uz') : null;
+                    
+                    this.saveStudents();
+                    this.showNotification(
+                        success ? `${student.login} - Kirdi!` : `${student.login} - Kirmadi!`,
+                        success ? 'success' : 'error'
+                    );
+                },
+
+                async loginAll() {
+                    if (this.loginInProgress) return;
+                    if (!confirm(`${this.students.length} ta o'quvchiga kirish boshlansinmi?`)) return;
+
+                    this.loginInProgress = true;
+                    this.showNotification('Jarayon boshlandi...', 'info');
+
+                    for (let student of this.students) {
+                        await this.loginStudent(student);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+
+                    this.loginInProgress = false;
+                    this.showNotification('Jarayon yakunlandi!', 'success');
+                },
+
+                deleteStudent(id) {
+                    if (!confirm('Haqiqatan ham o\'chirmoqchimisiz?')) return;
+
+                    this.students = this.students.filter(s => s.id !== id);
+                    this.saveStudents();
+                    this.filterStudents();
+                    this.showNotification('O\'chirildi!', 'success');
+                },
+
+                deleteAll() {
+                    if (!confirm(`Haqiqatan ham ${this.students.length} ta o'quvchini o'chirish?`)) return;
+
+                    this.students = [];
+                    this.saveStudents();
+                    this.filterStudents();
+                    this.showNotification('Hammas o\'chirildi!', 'success');
+                },
+
+                exportData() {
+                    const dataStr = JSON.stringify(this.students, null, 2);
+                    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(dataBlob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `emaktab_${new Date().getTime()}.json`;
+                    link.click();
+                    this.showNotification('Export qilindi!', 'success');
+                },
+
+                excelYuklash(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    event.target.value = '';
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                        const ws = wb.Sheets[wb.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                        let added = 0;
+                        rows.forEach((row, i) => {
+                            const login = String(row[0] || '').trim();
+                            if (!login || login.toLowerCase() === 'login') return;
+                            if (this.students.find(s => s.login === login)) return;
+                            this.students.push({
+                                id: Date.now() + Math.random(),
+                                login: login,
+                                password1: '12345678',
+                                password2: '87654321',
+                                class_name: '',
+                                full_name: '',
+                                status: 'pending',
+                                last_login: null
+                            });
+                            added++;
+                        });
+                        this.saveStudents();
+                        this.filterStudents();
+                        this.showNotification(`✅ ${added} ta o'quvchi qo'shildi!`, 'success');
+                    };
+                    reader.readAsArrayBuffer(file);
+                },
+
+                showNotification(message, type = 'info') {
+                    this.notification = { show: true, message, type };
+                    setTimeout(() => {
+                        this.notification.show = false;
+                    }, 3000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
